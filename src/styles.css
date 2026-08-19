@@ -1,0 +1,247 @@
+/* styles.css — instrument aesthetic. System-mono only; no web fonts load,
+   so the offline promise holds. Personality comes from layout + a restrained
+   "redacted dossier" palette. */
+
+:root {
+  --bg: #0b0e14;
+  --panel: #121722;
+  --panel-2: #0e131c;
+  --line: #223047;
+  --ink: #d7e0ee;
+  --ink-dim: #7c8aa5;
+  --accent: #ffb454;
+  --accent-2: #4ea1ff;
+  --ok: #7ee08a;
+  --error: #ff6b6b;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code",
+    Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+body {
+  background-image: radial-gradient(circle at 15% -10%, #16202f 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, #141b28 0%, transparent 40%);
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+}
+
+/* masthead */
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mark {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 6px;
+}
+.mark__dot {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+.mark__lines {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 10px;
+  height: 3px;
+  background: var(--ink-dim);
+  box-shadow: 0 6px 0 -1px var(--ink-dim), 0 11px 0 -1px var(--line);
+}
+
+.install {
+  margin-left: auto;
+  align-self: center;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.install:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+.install:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.masthead__text h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 4px;
+  font-weight: 700;
+}
+.tagline {
+  margin: 2px 0 0;
+  color: var(--ink-dim);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+/* tabs */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin: 22px 0 18px;
+}
+.tab {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab--active {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+/* panels + fields */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+.field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+input[type="file"],
+input[type="password"],
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+input[type="file"] {
+  padding: 8px;
+  color: var(--ink-dim);
+}
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px rgba(78, 161, 255, 0.15);
+}
+
+.action {
+  width: 100%;
+  padding: 12px 16px;
+  margin-top: 4px;
+  background: var(--accent-2);
+  color: var(--bg);
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.action:hover {
+  filter: brightness(1.08);
+}
+.action:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.hint {
+  margin: -6px 0 16px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.status {
+  margin: 14px 0 0;
+  min-height: 1.2em;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.status--ok {
+  color: var(--ok);
+}
+.status--error {
+  color: var(--error);
+}
+
+.footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+.footer strong {
+  color: var(--accent);
+}

@@ -1,0 +1,44 @@
+STEGANOGRAPH — read me first
+============================
+
+What this is
+------------
+A tiny, fully-offline tool that HIDES a text message inside a PNG image, and
+REVEALS it back. Optionally the message is encrypted with a password (AES-256).
+Nothing you do here is ever sent anywhere — it all runs on your own device.
+
+How to open it
+--------------
+1. Double-click "Steganograph.html". It opens in your web browser.
+   (No install, no internet, no account. It works with your Wi-Fi off.)
+
+To HIDE a message
+-----------------
+1. Open the "Hide" tab.
+2. Choose a PNG (or any) image to hide the message inside.
+3. Type your message. If you want it encrypted, enter a password.
+4. Click Hide, then download the resulting PNG.
+5. Send that PNG to the other person.
+
+To REVEAL a message
+-------------------
+1. Open the "Reveal" tab.
+2. Choose the PNG you received.
+3. If it was encrypted, enter the same password.
+4. Click Reveal — the hidden message appears.
+
+IMPORTANT — share the output ONLY as a PNG
+------------------------------------------
+The hidden data lives in tiny pixel details. Sending the image as JPEG, a
+screenshot, or through most chat apps (WhatsApp, Telegram "photo", etc.)
+RE-COMPRESSES it and DESTROYS the hidden message.
+
+- Send the PNG as a FILE / DOCUMENT / attachment, not as a "photo".
+- Do not screenshot it. Do not convert it to JPEG.
+
+Security note
+-------------
+- Without a password, the message is only hidden, not secured — anyone who
+  suspects it can read it. Use a password for real confidentiality.
+- The password is never stored or transmitted. If you forget it, the message
+  cannot be recovered. A wrong password fails cleanly (no garbage output).

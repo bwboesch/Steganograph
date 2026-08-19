@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dev-dist/
+share/
+.test-bundle.mjs
+.playwright-mcp/
+*.local
+.claude/

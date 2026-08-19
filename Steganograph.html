@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0e14" />
+    <meta
+      name="description"
+      content="Hide encrypted messages inside images. Single-file, works offline — no install, no server."
+    />
+    <title>Steganograph — portable</title>
+    <script type="module" crossorigin>(function(){const e=document.createElement("link").relList;if(e&&e.supports&&e.supports("modulepreload"))return;for(const o of document.querySelectorAll('link[rel="modulepreload"]'))a(o);new MutationObserver(o=>{for(const r of o)if(r.type==="childList")for(const s of r.addedNodes)s.tagName==="LINK"&&s.rel==="modulepreload"&&a(s)}).observe(document,{childList:!0,subtree:!0});function n(o){const r={};return o.integrity&&(r.integrity=o.integrity),o.referrerPolicy&&(r.referrerPolicy=o.referrerPolicy),o.crossOrigin==="use-credentials"?r.credentials="include":o.crossOrigin==="anonymous"?r.credentials="omit":r.credentials="same-origin",r}function a(o){if(o.ep)return;o.ep=!0;const r=n(o);fetch(o.href,r)}})();const M=25e4,g=16,v=12,N=256,T=new TextEncoder,F=new TextDecoder;async function B(t,e){const n=await crypto.subtle.importKey("raw",T.encode(t),"PBKDF2",!1,["deriveKey"]);return crypto.subtle.deriveKey({name:"PBKDF2",salt:e,iterations:M,hash:"SHA-256"},n,{name:"AES-GCM",length:N},!1,["encrypt","decrypt"])}async function G(t,e){const n=crypto.getRandomValues(new Uint8Array(g)),a=crypto.getRandomValues(new Uint8Array(v)),o=await B(e,n),r=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:a},o,T.encode(t))),s=new Uint8Array(g+v+r.length);return s.set(n,0),s.set(a,g),s.set(r,g+v),s}async function V(t,e){if(t.length<g+v)throw new Error("ciphertext too short");const n=t.subarray(0,g),a=t.subarray(g,g+v),o=t.subarray(g+v),r=await B(e,n);let s;try{s=await crypto.subtle.decrypt({name:"AES-GCM",iv:a},r,o)}catch{throw new Error("wrong password, or the image was altered/recompressed")}return F.decode(s)}function b(t){return Math.floor(t.width*t.height*3/8)}function _(t,e){if(e.length>b(t))throw new Error(`payload too large: ${e.length} bytes > capacity ${b(t)} bytes`);const n=new Uint8ClampedArray(t.data);let a=0;const o=e.length*8;for(let r=0;r<n.length&&a<o;r+=4){for(let s=0;s<3&&a<o;s++){const l=e[a>>3]>>7-(a&7)&1,h=r+s;n[h]=n[h]&254|l,a++}n[r+3]=255}for(let r=3;r<n.length;r+=4)n[r]=255;return k(n,t.width,t.height)}function C(t,e){const n=new Uint8Array(e),a=e*8,o=t.data;let r=0;for(let s=0;s<o.length&&r<a;s+=4)for(let l=0;l<3&&r<a;l++){const h=o[s+l]&1;n[r>>3]|=h<<7-(r&7),r++}if(r<a)throw new Error("image too small to contain the requested payload");return n}function k(t,e,n){return typeof ImageData<"u"?new ImageData(t,e,n):{data:t,width:e,height:n,colorSpace:"srgb"}}const S=new Uint8Array([83,84,71,49]),U=1,p=10,O=1,Y=new TextEncoder,q=new TextDecoder;function H(t){return Math.max(0,b(t)-p)}async function j(t,e,n){let a,o=0;n&&n.length>0?(a=await G(e,n),o|=O):a=Y.encode(e);const r=new Uint8Array(p+a.length);if(r.set(S,0),r[4]=U,r[5]=o,new DataView(r.buffer).setUint32(6,a.length,!1),r.set(a,p),r.length>b(t))throw new Error(`message too large for this image (need ${r.length} bytes, capacity ${b(t)})`);return _(t,r)}async function z(t,e){const n=C(t,p);for(let l=0;l<S.length;l++)if(n[l]!==S[l])throw new Error("no hidden message found (bad magic)");if(n[4]!==U)throw new Error(`unsupported version: ${n[4]}`);const a=n[5],o=new DataView(n.buffer,n.byteOffset,p).getUint32(6,!1),s=C(t,p+o).subarray(p);if(a&O){if(!e||e.length===0)throw new Error("this message is encrypted — a password is required");return V(s,e)}return q.decode(s)}const c=t=>{const e=document.getElementById(t);if(!e)throw new Error(`missing element #${t}`);return e};async function R(t,e){const n=await createImageBitmap(t);e.width=n.width,e.height=n.height;const a=e.getContext("2d",{willReadFrequently:!0});if(!a)throw new Error("canvas 2D context unavailable");return a.clearRect(0,0,e.width,e.height),a.drawImage(n,0,0),n.close(),a.getImageData(0,0,e.width,e.height)}function J(t,e){e.width=t.width,e.height=t.height;const n=e.getContext("2d");if(!n)throw new Error("canvas 2D context unavailable");return n.putImageData(t,0,0),new Promise((a,o)=>e.toBlob(r=>r?a(r):o(new Error("PNG export failed")),"image/png"))}function Q(t,e){const n=URL.createObjectURL(t),a=document.createElement("a");a.href=n,a.download=e,a.click(),URL.revokeObjectURL(n)}function d(t,e,n=""){t.textContent=e,t.className="status"+(n?` status--${n}`:"")}function W(){const t=c("tab-hide"),e=c("tab-reveal"),n=c("panel-hide"),a=c("panel-reveal");function o(i){t.classList.toggle("tab--active",i),e.classList.toggle("tab--active",!i),t.setAttribute("aria-selected",String(i)),e.setAttribute("aria-selected",String(!i)),n.hidden=!i,a.hidden=i}t.addEventListener("click",()=>o(!0)),e.addEventListener("click",()=>o(!1));const r=c("hide-image"),s=c("hide-message"),l=c("hide-password"),h=c("hide-run"),y=c("hide-status"),D=c("hide-capacity"),I=c("hide-canvas");let w=null;r.addEventListener("change",async()=>{var u;const i=(u=r.files)==null?void 0:u[0];if(i)try{w=await R(i,I);const f=H(w);D.textContent=`Capacity: ~${f.toLocaleString()} bytes (${w.width}×${w.height}). Encryption adds ~44 bytes of overhead.`,d(y,"")}catch(f){w=null,D.textContent="Could not read that image.",d(y,String(f instanceof Error?f.message:f),"error")}}),h.addEventListener("click",async()=>{if(!w)return d(y,"Load a carrier image first.","error");const i=s.value;if(!i)return d(y,"Type a message to conceal.","error");h.disabled=!0,d(y,"Embedding…");try{const u=await j(w,i,l.value||void 0),f=await J(u,I);Q(f,"stego.png"),d(y,l.value?"Done — encrypted message embedded. Downloaded stego.png.":"Done — message embedded (plaintext). Downloaded stego.png.","ok")}catch(u){d(y,String(u instanceof Error?u.message:u),"error")}finally{h.disabled=!1}});const L=c("reveal-image"),P=c("reveal-password"),x=c("reveal-run"),m=c("reveal-status"),$=c("reveal-output"),A=c("reveal-output-field"),K=c("reveal-canvas");let E=null;L.addEventListener("change",async()=>{var u;const i=(u=L.files)==null?void 0:u[0];if(i)try{E=await R(i,K),d(m,"")}catch(f){E=null,d(m,String(f instanceof Error?f.message:f),"error")}}),x.addEventListener("click",async()=>{if(!E)return d(m,"Load a stego image first.","error");x.disabled=!0,d(m,"Reading…"),A.hidden=!0;try{const i=await z(E,P.value||void 0);$.value=i,A.hidden=!1,d(m,"Message revealed.","ok")}catch(i){d(m,String(i instanceof Error?i.message:i),"error")}finally{x.disabled=!1}})}W();</script>
+    <style rel="stylesheet" crossorigin>:root{--bg: #0b0e14;--panel: #121722;--panel-2: #0e131c;--line: #223047;--ink: #d7e0ee;--ink-dim: #7c8aa5;--accent: #ffb454;--accent-2: #4ea1ff;--ok: #7ee08a;--error: #ff6b6b;--mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace}*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:15px;line-height:1.5}body{background-image:radial-gradient(circle at 15% -10%,#16202f 0%,transparent 45%),radial-gradient(circle at 100% 0%,#141b28 0%,transparent 40%);min-height:100vh}.app{max-width:640px;margin:0 auto;padding:28px 20px 48px}.masthead{display:flex;align-items:center;gap:16px;padding-bottom:20px;border-bottom:1px solid var(--line)}.mark{position:relative;width:44px;height:44px;flex:0 0 auto;border:1px solid var(--line);background:var(--panel-2);border-radius:6px}.mark__dot{position:absolute;top:9px;left:9px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}.mark__lines{position:absolute;left:9px;right:9px;bottom:10px;height:3px;background:var(--ink-dim);box-shadow:0 6px 0 -1px var(--ink-dim),0 11px 0 -1px var(--line)}.install{margin-left:auto;align-self:center;padding:8px 14px;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:6px;font-family:inherit;font-size:12px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:background .15s,color .15s}.install:hover{background:var(--accent);color:var(--bg)}.install:disabled{opacity:.5;cursor:default}.masthead__text h1{margin:0;font-size:20px;letter-spacing:4px;font-weight:700}.tagline{margin:2px 0 0;color:var(--ink-dim);font-size:12px;letter-spacing:1px}.tabs{display:flex;gap:6px;margin:22px 0 18px}.tab{flex:1;padding:10px 14px;background:var(--panel-2);color:var(--ink-dim);border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:color .15s,border-color .15s,background .15s}.tab:hover{color:var(--ink)}.tab--active{color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:700}.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}.field{display:block;margin-bottom:16px}.field__label{display:block;margin-bottom:6px;font-size:12px;letter-spacing:1px;color:var(--ink-dim);text-transform:uppercase}input[type=file],input[type=password],textarea{width:100%;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;color:var(--ink);font-family:inherit;font-size:14px;resize:vertical}input[type=file]{padding:8px;color:var(--ink-dim)}input:focus,textarea:focus{outline:none;border-color:var(--accent-2);box-shadow:0 0 0 2px #4ea1ff26}.action{width:100%;padding:12px 16px;margin-top:4px;background:var(--accent-2);color:var(--bg);border:none;border-radius:6px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:filter .15s}.action:hover{filter:brightness(1.08)}.action:disabled{opacity:.55;cursor:progress}.hint{margin:-6px 0 16px;font-size:12px;color:var(--ink-dim)}.status{margin:14px 0 0;min-height:1.2em;font-size:13px;color:var(--ink-dim)}.status--ok{color:var(--ok)}.status--error{color:var(--error)}.footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:12px}.footer strong{color:var(--accent)}</style>
+  </head>
+  <body>
+    <main id="app" class="app">
+      <header class="masthead">
+        <div class="mark" aria-hidden="true">
+          <span class="mark__dot"></span>
+          <span class="mark__lines"></span>
+        </div>
+        <div class="masthead__text">
+          <h1>STEGANOGRAPH</h1>
+          <p class="tagline">conceal · encrypt · reveal — offline</p>
+        </div>
+      </header>
+
+      <nav class="tabs" role="tablist">
+        <button id="tab-hide" class="tab tab--active" role="tab" aria-selected="true">
+          Hide
+        </button>
+        <button id="tab-reveal" class="tab" role="tab" aria-selected="false">Reveal</button>
+      </nav>
+
+      <!-- HIDE -->
+      <section id="panel-hide" class="panel" role="tabpanel">
+        <label class="field">
+          <span class="field__label">Carrier image (PNG or any decodable image)</span>
+          <input id="hide-image" type="file" accept="image/*" />
+        </label>
+        <p id="hide-capacity" class="hint">Load an image to see its capacity.</p>
+
+        <label class="field">
+          <span class="field__label">Secret message</span>
+          <textarea id="hide-message" rows="4" placeholder="Type the message to conceal…"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Password (optional — enables AES-GCM encryption)</span>
+          <input id="hide-password" type="password" autocomplete="new-password" placeholder="leave blank to embed as plaintext" />
+        </label>
+
+        <button id="hide-run" class="action">Embed &amp; download PNG</button>
+        <p id="hide-status" class="status" role="status"></p>
+        <canvas id="hide-canvas" hidden></canvas>
+      </section>
+
+      <!-- REVEAL -->
+      <section id="panel-reveal" class="panel" hidden role="tabpanel">
+        <label class="field">
+          <span class="field__label">Stego image (must be a lossless PNG)</span>
+          <input id="reveal-image" type="file" accept="image/*" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Password (if the message is encrypted)</span>
+          <input id="reveal-password" type="password" autocomplete="off" />
+        </label>
+
+        <button id="reveal-run" class="action">Reveal message</button>
+        <p id="reveal-status" class="status" role="status"></p>
+        <label class="field" hidden id="reveal-output-field">
+          <span class="field__label">Revealed message</span>
+          <textarea id="reveal-output" rows="4" readonly></textarea>
+        </label>
+        <canvas id="reveal-canvas" hidden></canvas>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Everything runs in your browser. No pixel and no password ever leaves this
+          device. Share only <strong>PNG</strong> — recompression (JPEG, messengers)
+          destroys the hidden bits.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

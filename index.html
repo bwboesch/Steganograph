@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0e14" />
+    <link rel="icon" type="image/png" href="./icon-192.png" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <meta
+      name="description"
+      content="Hide encrypted messages inside images. Works fully offline."
+    />
+    <title>Steganograph</title>
+  </head>
+  <body>
+    <main id="app" class="app">
+      <header class="masthead">
+        <div class="mark" aria-hidden="true">
+          <span class="mark__dot"></span>
+          <span class="mark__lines"></span>
+        </div>
+        <div class="masthead__text">
+          <h1>STEGANOGRAPH</h1>
+          <p class="tagline">conceal · encrypt · reveal — offline</p>
+        </div>
+        <button id="install-btn" class="install" type="button" hidden>Install app</button>
+      </header>
+
+      <nav class="tabs" role="tablist">
+        <button id="tab-hide" class="tab tab--active" role="tab" aria-selected="true">
+          Hide
+        </button>
+        <button id="tab-reveal" class="tab" role="tab" aria-selected="false">Reveal</button>
+      </nav>
+
+      <!-- HIDE -->
+      <section id="panel-hide" class="panel" role="tabpanel">
+        <label class="field">
+          <span class="field__label">Carrier image (PNG or any decodable image)</span>
+          <input id="hide-image" type="file" accept="image/*" />
+        </label>
+        <p id="hide-capacity" class="hint">Load an image to see its capacity.</p>
+
+        <label class="field">
+          <span class="field__label">Secret message</span>
+          <textarea id="hide-message" rows="4" placeholder="Type the message to conceal…"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Password (optional — enables AES-GCM encryption)</span>
+          <input id="hide-password" type="password" autocomplete="new-password" placeholder="leave blank to embed as plaintext" />
+        </label>
+
+        <button id="hide-run" class="action">Embed &amp; download PNG</button>
+        <p id="hide-status" class="status" role="status"></p>
+        <canvas id="hide-canvas" hidden></canvas>
+      </section>
+
+      <!-- REVEAL -->
+      <section id="panel-reveal" class="panel" hidden role="tabpanel">
+        <label class="field">
+          <span class="field__label">Stego image (must be a lossless PNG)</span>
+          <input id="reveal-image" type="file" accept="image/*" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Password (if the message is encrypted)</span>
+          <input id="reveal-password" type="password" autocomplete="off" />
+        </label>
+
+        <button id="reveal-run" class="action">Reveal message</button>
+        <p id="reveal-status" class="status" role="status"></p>
+        <label class="field" hidden id="reveal-output-field">
+          <span class="field__label">Revealed message</span>
+          <textarea id="reveal-output" rows="4" readonly></textarea>
+        </label>
+        <canvas id="reveal-canvas" hidden></canvas>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Everything runs in your browser. No pixel and no password ever leaves this
+          device. Share only <strong>PNG</strong> — recompression (JPEG, messengers)
+          destroys the hidden bits.
+        </p>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
