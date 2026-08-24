@@ -7,6 +7,7 @@
 import { encode, decode, messageCapacityBytes } from "../src/engine/codec";
 import { capacityBytes, embed, extract } from "../src/engine/stego";
 import { makeSlotMapper, deriveScatterKey } from "../src/engine/scatter";
+import { embedBits, extractBits, blockCapacity } from "../src/engine/dct";
 
 // --- ImageData shim ---------------------------------------------------------
 if (typeof (globalThis as any).ImageData === "undefined") {
@@ -221,6 +222,21 @@ async function main() {
     }
     const roundtrip = (await decode(out, "the-key")) === "coordinates: 51.5,-0.1";
     ok("encrypted payload is keyed yet header stays readable", sawEncrypted && roundtrip);
+  }
+
+  // 15. DCT/QIM prototype: lossless (no-recompression) bit roundtrip is exact.
+  //     (JPEG-survival is measured separately in tools/dct-robustness/.)
+  {
+    const img = makeImage(64, 64); // 8×8 blocks → 64 bits capacity
+    const cap = blockCapacity(img);
+    ok("dct block capacity math", cap === 8 * 8);
+    const bits = new Uint8Array(cap);
+    for (let i = 0; i < cap; i++) bits[i] = (i * 5 + 1) & 1;
+    const stego = embedBits(img, bits, { step: 24 });
+    const got = extractBits(stego, cap, { step: 24 });
+    let exact = true;
+    for (let i = 0; i < cap; i++) if (got[i] !== bits[i]) exact = false;
+    ok("dct embed/extract roundtrip is exact (no recompression)", exact);
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

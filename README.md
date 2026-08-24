@@ -97,16 +97,28 @@ inputs, a `<canvas>` and the codec.
 - ✅ **Seed-based bit-scattering** — *done* (`scatter.ts`). Payload bits are
   spread pseudo-randomly from a keyed seed, blurring the flat LSB steganalysis
   signature and hiding the payload's location for encrypted messages.
-- **DCT-domain embedding** for robustness against recompression — the real
-  unlock for sharing over messengers; plain LSB cannot survive that. *(next)*
+- 🔬 **DCT-domain embedding** — *prototype measured* (`src/engine/dct.ts` +
+  `tools/dct-robustness/`). QIM on mid-frequency 8×8-block luma coefficients.
+  Measured against a real JPEG compressor:
+  - **Survives pure re-encoding well**: 0 bit-errors down to JPEG Q60 (Δ≥20); a
+    40-byte message comes back exact even without ECC.
+  - **Does *not* survive downscaling**: resizing shifts the block grid — ~50%
+    bit-errors at ×0.5, so anything that resizes (WhatsApp/Instagram) still
+    wipes it. See [`tools/dct-robustness/FINDINGS.md`](tools/dct-robustness/FINDINGS.md).
+
+  Next step: ship a clearly-labelled **"Robust (JPEG)" mode** for the
+  no-resize cases (email/Telegram-as-file/Signal-original/cloud links). Beating
+  resize needs a resync/resolution-independent scheme — a separate, larger effort.
 
 ## Layout
 
 ```
 src/engine/{crypto,stego,scatter,codec}.ts  DOM-free engine (the proven core)
+src/engine/dct.ts                           experimental DCT/QIM (not yet in the UI)
 src/{ui,main}.ts, src/styles.css            PWA shell
-test/engine.test.ts                         16 headless tests: roundtrip / tamper /
-                                            capacity / LSB / scatter-bijection / keying
+test/engine.test.ts                         18 headless tests: roundtrip / tamper /
+                                            capacity / LSB / scatter / dct
+tools/dct-robustness/                       JPEG-survival measurement harness + FINDINGS
 vite.config.ts                              vite-plugin-pwa (autoUpdate, Workbox precache)
 public/icon-{192,512}.png                   app icons
 ```
