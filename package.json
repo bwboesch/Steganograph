@@ -1,5 +1,5 @@
 {
-  "name": "stego-pwa",
+  "name": "steganograph",
   "version": "1.0.0",
   "description": "Offline PWA that hides password-encrypted messages inside PNG images via LSB steganography.",
   "type": "module",
