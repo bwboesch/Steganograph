@@ -9,6 +9,11 @@ image using LSB steganography — optionally AES-GCM encrypted with a password.
 Nothing ever leaves your device.
 
 <p align="center">
+  <img src="docs/demo.gif" alt="Demo: load a carrier image, type a secret message, set a password, embed it into a PNG, then reveal the decrypted message back" width="480"><br>
+  <em>A full encrypt → embed → reveal roundtrip — recorded from the live app.</em>
+</p>
+
+<p align="center">
   <img src="docs/screenshot.png" alt="Steganograph — the Hide panel: carrier image, secret message, optional password, and an Embed &amp; download PNG button" width="480">
 </p>
 
