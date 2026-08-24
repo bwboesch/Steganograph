@@ -8,6 +8,10 @@ An installable, **fully-offline** PWA that hides a text message inside a PNG
 image using LSB steganography — optionally AES-GCM encrypted with a password.
 Nothing ever leaves your device.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Steganograph — the Hide panel: carrier image, secret message, optional password, and an Embed &amp; download PNG button" width="480">
+</p>
+
 ## Quick start
 
 Toolchain is [Bun](https://bun.sh) (the environment has no Node).
