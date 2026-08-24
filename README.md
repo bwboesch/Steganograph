@@ -1,5 +1,7 @@
 # Steganograph
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 An installable, **fully-offline** PWA that hides a text message inside a PNG
 image using LSB steganography — optionally AES-GCM encrypted with a password.
 Nothing ever leaves your device.
