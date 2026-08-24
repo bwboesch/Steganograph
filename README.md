@@ -9,6 +9,9 @@ An installable, **fully-offline** PWA that hides a text message inside a PNG
 image using LSB steganography — optionally AES-GCM encrypted with a password.
 Nothing ever leaves your device.
 
+**▶ Live demo: <https://bwboesch.github.io/Steganograph/>** — open on Android
+Chrome and tap **Install app** to add it to your home screen.
+
 <p align="center">
   <img src="docs/demo.gif" alt="Demo: load a carrier image, type a secret message, set a password, embed it into a PNG, then reveal the decrypted message back" width="480"><br>
   <em>A full encrypt → embed → reveal roundtrip — recorded from the live app.</em>
