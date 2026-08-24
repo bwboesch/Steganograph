@@ -6,6 +6,7 @@
 
 import { encode, decode, messageCapacityBytes } from "../src/engine/codec";
 import { capacityBytes, embed, extract } from "../src/engine/stego";
+import { makeSlotMapper, deriveScatterKey } from "../src/engine/scatter";
 
 // --- ImageData shim ---------------------------------------------------------
 if (typeof (globalThis as any).ImageData === "undefined") {
@@ -157,6 +158,69 @@ async function main() {
       got.length === bytes.length && got.every((b, i) => b === bytes[i]),
     );
     ok("capacity math is sane", capacityBytes(img) === Math.floor((20 * 20 * 3) / 8));
+  }
+
+  // 11. The scatter permutation is a true bijection over [0, count).
+  {
+    const N = 500;
+    const map = makeSlotMapper(N, deriveScatterKey("k"));
+    const seen = new Set<number>();
+    let inRange = true;
+    for (let i = 0; i < N; i++) {
+      const s = map(i);
+      if (s < 0 || s >= N) inRange = false;
+      seen.add(s);
+    }
+    ok("scatter permutation is a bijection", inRange && seen.size === N);
+  }
+
+  // 12. Whitening: a tiny message reaches well past the sequential prefix.
+  {
+    const src = makeImage(200, 1); // 200 px wide, N = 600 slots
+    const out = await encode(src, "hi"); // ~96 header+payload bits
+    let maxChangedPixel = -1;
+    for (let p = 0; p < src.width * src.height; p++) {
+      const i = p * 4;
+      if (
+        out.data[i] !== src.data[i] ||
+        out.data[i + 1] !== src.data[i + 1] ||
+        out.data[i + 2] !== src.data[i + 2]
+      ) {
+        maxChangedPixel = p;
+      }
+    }
+    // A purely sequential embed would touch only the first ~32 pixels.
+    ok("scatter spreads bits beyond the sequential prefix", maxChangedPixel > src.width * 0.5);
+  }
+
+  // 13. Determinism + key sensitivity.
+  {
+    const a1 = makeSlotMapper(1000, deriveScatterKey("alpha"));
+    const a2 = makeSlotMapper(1000, deriveScatterKey("alpha"));
+    const b = makeSlotMapper(1000, deriveScatterKey("beta"));
+    let sameKeyEqual = true;
+    let diffKeyDiffers = false;
+    for (let i = 0; i < 1000; i++) {
+      if (a1(i) !== a2(i)) sameKeyEqual = false;
+      if (a1(i) !== b(i)) diffKeyDiffers = true;
+    }
+    ok("same key ⇒ identical order; different key ⇒ different", sameKeyEqual && diffKeyDiffers);
+  }
+
+  // 14. Location secrecy: an encrypted message's payload is keyed by password,
+  //     so the header is still readable but the body needs the right password.
+  {
+    const img = makeImage(64, 64);
+    const out = await encode(img, "coordinates: 51.5,-0.1", "the-key");
+    // header (public) is readable → decode without a password reports "encrypted"
+    let sawEncrypted = false;
+    try {
+      await decode(out);
+    } catch (e) {
+      sawEncrypted = /password/i.test(String(e));
+    }
+    const roundtrip = (await decode(out, "the-key")) === "coordinates: 51.5,-0.1";
+    ok("encrypted payload is keyed yet header stays readable", sawEncrypted && roundtrip);
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

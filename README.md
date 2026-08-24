@@ -55,7 +55,7 @@ store, no APK.
 
 ## How it works
 
-Three **DOM-free** engine modules under `src/engine/` — they touch no browser
+Four **DOM-free** engine modules under `src/engine/` — they touch no browser
 API beyond the `ImageData` *shape*, which is exactly why the whole engine is
 headless-testable:
 
@@ -65,8 +65,16 @@ headless-testable:
   and B channels via canvas `ImageData`. Every pixel is forced **opaque**
   (alpha = 255) so premultiplied-alpha rounding can't flip color LSBs on
   re-encode.
+- **`scatter.ts`** — spreads the payload pseudo-randomly across the image
+  instead of front-to-back, via a keyed Feistel permutation of the bit-slots.
+  This dissolves the sequential-fill boundary that classic LSB steganalysis
+  keys on. The header rides a **public** permutation (so decode can still read
+  the length + "is it encrypted?" without a password); the payload of an
+  **encrypted** message rides a **password-keyed** permutation, so an attacker
+  can't even locate the payload bits without the key.
 - **`codec.ts`** — frames the payload with a header
-  (`MAGIC ‖ version ‖ flags ‖ length`) and clamps crypto + stego together.
+  (`MAGIC ‖ version ‖ flags ‖ length`) and clamps crypto + stego + scatter
+  together.
 
 The UI shell (`src/ui.ts`, `src/main.ts`) only shuttles pixels between file
 inputs, a `<canvas>` and the codec.
@@ -79,23 +87,26 @@ inputs, a `<canvas>` and the codec.
   **fail loudly** rather than return garbage.
 - **Keys never leave the browser.** No network, no telemetry, no web fonts —
   which is what makes "offline" honest.
-- LSB is **not robust to recompression.** Share the output **only as PNG**.
-  JPEG, screenshots, and most messengers re-encode images and will destroy the
-  hidden bits. This is a limitation of v1, not a bug.
+- Scattering blurs the steganalysis *signature*; it does **not** add robustness
+  to recompression. LSB (in any bit order) is destroyed by re-encoding, so share
+  the output **only as PNG** — JPEG, screenshots, and most messengers re-encode
+  and will wipe the hidden bits. Robustness is the next roadmap item (DCT).
 
 ## Roadmap
 
+- ✅ **Seed-based bit-scattering** — *done* (`scatter.ts`). Payload bits are
+  spread pseudo-randomly from a keyed seed, blurring the flat LSB steganalysis
+  signature and hiding the payload's location for encrypted messages.
 - **DCT-domain embedding** for robustness against recompression — the real
-  unlock for sharing over messengers; plain LSB cannot survive that.
-- **Seed-based bit-scattering** — spread payload bits pseudo-randomly from a
-  seed to blur the flat LSB steganalysis signature.
+  unlock for sharing over messengers; plain LSB cannot survive that. *(next)*
 
 ## Layout
 
 ```
-src/engine/{crypto,stego,codec}.ts   DOM-free engine (the proven core)
-src/{ui,main}.ts, src/styles.css     PWA shell
-test/engine.test.ts                  headless roundtrip / tamper / capacity / LSB tests
-vite.config.ts                       vite-plugin-pwa (autoUpdate, Workbox precache)
-public/icon-{192,512}.png            app icons
+src/engine/{crypto,stego,scatter,codec}.ts  DOM-free engine (the proven core)
+src/{ui,main}.ts, src/styles.css            PWA shell
+test/engine.test.ts                         16 headless tests: roundtrip / tamper /
+                                            capacity / LSB / scatter-bijection / keying
+vite.config.ts                              vite-plugin-pwa (autoUpdate, Workbox precache)
+public/icon-{192,512}.png                   app icons
 ```
