@@ -1,5 +1,6 @@
 # Steganograph
 
+[![Build PWA](https://github.com/bwboesch/Steganograph/actions/workflows/build.yml/badge.svg)](https://github.com/bwboesch/Steganograph/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8.svg?logo=pwa&logoColor=white)](#install-on-android-as-an-app)
 [![Offline](https://img.shields.io/badge/offline-100%25-2ea44f.svg)](#security-model)
