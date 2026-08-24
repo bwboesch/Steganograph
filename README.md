@@ -1,6 +1,8 @@
 # Steganograph
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8.svg?logo=pwa&logoColor=white)](#install-on-android-as-an-app)
+[![Offline](https://img.shields.io/badge/offline-100%25-2ea44f.svg)](#security-model)
 
 An installable, **fully-offline** PWA that hides a text message inside a PNG
 image using LSB steganography — optionally AES-GCM encrypted with a password.
