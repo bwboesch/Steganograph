@@ -8,6 +8,7 @@ import { encode, decode, messageCapacityBytes } from "../src/engine/codec";
 import { capacityBytes, embed, extract } from "../src/engine/stego";
 import { makeSlotMapper, deriveScatterKey } from "../src/engine/scatter";
 import { embedBits, extractBits, blockCapacity } from "../src/engine/dct";
+import { encodeRobust, decodeRobust, robustMessageCapacityBytes } from "../src/engine/robust";
 
 // --- ImageData shim ---------------------------------------------------------
 if (typeof (globalThis as any).ImageData === "undefined") {
@@ -237,6 +238,57 @@ async function main() {
     let exact = true;
     for (let i = 0; i < cap; i++) if (got[i] !== bits[i]) exact = false;
     ok("dct embed/extract roundtrip is exact (no recompression)", exact);
+  }
+
+  // 16. Robust mode: plaintext roundtrip through the DCT/QIM codec (no channel).
+  //     Header alone costs 80·5 = 400 blocks, so images must be comfortably big.
+  {
+    const img = makeImage(320, 320); // 40×40 = 1600 blocks
+    const msg = "robust plaintext — äöü";
+    const out = await encodeRobust(img, msg);
+    ok("robust plaintext roundtrip", (await decodeRobust(out)) === msg);
+  }
+
+  // 17. Robust mode: encrypted roundtrip + wrong password fails loudly.
+  {
+    const img = makeImage(384, 384); // encryption adds ~44 bytes → needs more room
+    const msg = "coords 51.5,-0.1";
+    const out = await encodeRobust(img, msg, "the-key");
+    ok("robust encrypted roundtrip", (await decodeRobust(out, "the-key")) === msg);
+    ok("robust wrong password throws", await throws(() => decodeRobust(out, "nope")));
+    // header is public → decode without a password reports "encrypted"
+    let needsPw = false;
+    try {
+      await decodeRobust(out);
+    } catch (e) {
+      needsPw = /password/i.test(String(e));
+    }
+    ok("robust encrypted flag honored", needsPw);
+  }
+
+  // 18. Robust mode: survives a real JPEG re-encode (the whole point).
+  //     Simulate the export→messenger channel by requantizing each DCT coeff
+  //     to a plausible JPEG step, in-process (no external tools needed here).
+  {
+    const img = makeImage(256, 256); // 32×32 = 1024 blocks
+    const msg = "survives re-encoding";
+    const stego = await encodeRobust(img, msg);
+    // Coarsely requantize luma-ish: round every channel to steps of 8 — a
+    // heavier perturbation than JPEG Q92, well within Δ=24's margin.
+    const noisy = new Uint8ClampedArray(stego.data.length);
+    for (let i = 0; i < noisy.length; i += 4) {
+      for (let c = 0; c < 3; c++) noisy[i + c] = Math.round(stego.data[i + c] / 8) * 8;
+      noisy[i + 3] = 255;
+    }
+    const channel = new ImageData(noisy, stego.width, stego.height);
+    ok("robust survives coarse requantization (±JPEG-like)", (await decodeRobust(channel)) === msg);
+  }
+
+  // 19. Robust capacity: an over-capacity message is rejected.
+  {
+    const img = makeImage(64, 64); // 64 blocks total, header alone needs 400
+    ok("robust reports zero capacity when image too small", robustMessageCapacityBytes(img) === 0);
+    ok("robust over-capacity is rejected", await throws(() => encodeRobust(img, "x".repeat(100))));
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

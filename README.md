@@ -27,7 +27,7 @@ Toolchain is [Bun](https://bun.sh) (the environment has no Node).
 
 ```bash
 bun install
-bun run test      # engine proof — 12/12 headless tests
+bun run test      # engine proof — 25/25 headless tests
 bun run typecheck # tsc --noEmit
 bun run dev       # http://localhost:5173
 bun run build     # production build: service worker + manifest + precache
@@ -55,9 +55,17 @@ store, no APK.
 
 ## How it works
 
-Four **DOM-free** engine modules under `src/engine/` — they touch no browser
-API beyond the `ImageData` *shape*, which is exactly why the whole engine is
-headless-testable:
+The app has **two embedding modes**, both **DOM-free** under `src/engine/` —
+they touch no browser API beyond the `ImageData` *shape*, which is exactly why
+the whole engine is headless-testable:
+
+- **Lossless (PNG)** — LSB embedding. Maximum capacity, byte-exact. Any
+  re-encode destroys it, so the PNG must be shared unchanged.
+- **Robust (JPEG)** — DCT/QIM embedding. Survives JPEG re-encoding (email,
+  Telegram "send as file", Signal original, cloud links) but **not resizing**.
+  Lower capacity.
+
+The modules:
 
 - **`crypto.ts`** — PBKDF2-SHA-256 (250 000 iterations) derives an AES-GCM
   256-bit key from your password. Blob layout: `salt(16) ‖ iv(12) ‖ ciphertext(+tag)`.
@@ -74,7 +82,14 @@ headless-testable:
   can't even locate the payload bits without the key.
 - **`codec.ts`** — frames the payload with a header
   (`MAGIC ‖ version ‖ flags ‖ length`) and clamps crypto + stego + scatter
-  together.
+  together for the lossless mode.
+- **`dct.ts`** — DCT/QIM primitive for the robust mode: quantization-index
+  modulation on one mid-frequency coefficient of each 8×8 luminance block, one
+  bit per block. The step Δ is the robustness knob (Δ=24 → 0 bit-errors down to
+  JPEG Q60).
+- **`robust.ts`** — the robust-mode codec: same header framing + AES-GCM, plus
+  interleaved repetition ECC (R=5 header, R=3 body) over `dct.ts`. Exported as
+  JPEG.
 
 The UI shell (`src/ui.ts`, `src/main.ts`) only shuttles pixels between file
 inputs, a `<canvas>` and the codec.
@@ -88,36 +103,39 @@ inputs, a `<canvas>` and the codec.
 - **Keys never leave the browser.** No network, no telemetry, no web fonts —
   which is what makes "offline" honest.
 - Scattering blurs the steganalysis *signature*; it does **not** add robustness
-  to recompression. LSB (in any bit order) is destroyed by re-encoding, so share
-  the output **only as PNG** — JPEG, screenshots, and most messengers re-encode
-  and will wipe the hidden bits. Robustness is the next roadmap item (DCT).
+  to recompression. In **lossless (PNG)** mode, LSB (in any bit order) is
+  destroyed by re-encoding, so share the PNG unchanged. Use **robust (JPEG)**
+  mode when the image will be re-encoded — but note it does **not** survive
+  resizing, so messengers that downscale (WhatsApp, Instagram) still wipe it.
 
 ## Roadmap
 
 - ✅ **Seed-based bit-scattering** — *done* (`scatter.ts`). Payload bits are
   spread pseudo-randomly from a keyed seed, blurring the flat LSB steganalysis
   signature and hiding the payload's location for encrypted messages.
-- 🔬 **DCT-domain embedding** — *prototype measured* (`src/engine/dct.ts` +
-  `tools/dct-robustness/`). QIM on mid-frequency 8×8-block luma coefficients.
-  Measured against a real JPEG compressor:
-  - **Survives pure re-encoding well**: 0 bit-errors down to JPEG Q60 (Δ≥20); a
-    40-byte message comes back exact even without ECC.
+- ✅ **DCT-domain "Robust (JPEG)" mode** — *shipped* (`src/engine/dct.ts` +
+  `robust.ts`). QIM on mid-frequency 8×8-block luma coefficients, with
+  interleaved repetition ECC and JPEG export. Measured against a real JPEG
+  compressor (`tools/dct-robustness/`):
+  - **Survives pure re-encoding well**: 0 bit-errors down to JPEG Q60 (Δ≥20). A
+    real-browser E2E confirms a full encrypt → embed → JPEG export → second JPEG
+    re-encode → decrypt roundtrip.
   - **Does *not* survive downscaling**: resizing shifts the block grid — ~50%
     bit-errors at ×0.5, so anything that resizes (WhatsApp/Instagram) still
-    wipes it. See [`tools/dct-robustness/FINDINGS.md`](tools/dct-robustness/FINDINGS.md).
-
-  Next step: ship a clearly-labelled **"Robust (JPEG)" mode** for the
-  no-resize cases (email/Telegram-as-file/Signal-original/cloud links). Beating
-  resize needs a resync/resolution-independent scheme — a separate, larger effort.
+    wipes it. The UI labels this clearly. See
+    [`tools/dct-robustness/FINDINGS.md`](tools/dct-robustness/FINDINGS.md).
+- 🔭 **Resize-robust embedding** — beating downscaling needs a
+  resync/resolution-independent scheme (sync templates, log-polar/Fourier marks,
+  or feature-anchored blocks). A separate, larger research effort.
 
 ## Layout
 
 ```
-src/engine/{crypto,stego,scatter,codec}.ts  DOM-free engine (the proven core)
-src/engine/dct.ts                           experimental DCT/QIM (not yet in the UI)
-src/{ui,main}.ts, src/styles.css            PWA shell
-test/engine.test.ts                         18 headless tests: roundtrip / tamper /
-                                            capacity / LSB / scatter / dct
+src/engine/{crypto,stego,scatter,codec}.ts  lossless (PNG) LSB engine
+src/engine/{dct,robust}.ts                  robust (JPEG) DCT/QIM engine
+src/{ui,main}.ts, src/styles.css            PWA shell (two-mode UI)
+test/engine.test.ts                         25 headless tests: roundtrip / tamper /
+                                            capacity / LSB / scatter / dct / robust
 tools/dct-robustness/                       JPEG-survival measurement harness + FINDINGS
 vite.config.ts                              vite-plugin-pwa (autoUpdate, Workbox precache)
 public/icon-{192,512}.png                   app icons

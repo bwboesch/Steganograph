@@ -35,6 +35,23 @@
 
       <!-- HIDE -->
       <section id="panel-hide" class="panel" role="tabpanel">
+        <fieldset class="modes">
+          <legend class="field__label">Mode</legend>
+          <label class="mode">
+            <input type="radio" name="hide-mode" id="mode-lossless" value="lossless" checked />
+            <span><strong>Lossless (PNG)</strong> — max capacity, exact. Share the PNG unchanged; any re-encode destroys it.</span>
+          </label>
+          <label class="mode">
+            <input type="radio" name="hide-mode" id="mode-robust" value="robust" />
+            <span><strong>Robust (JPEG)</strong> — survives JPEG re-encoding (email, Telegram-as-file, Signal original, cloud links).</span>
+          </label>
+        </fieldset>
+        <p id="robust-warning" class="warning" hidden>
+          ⚠ Robust mode survives <strong>re-encoding</strong> but <strong>not resizing</strong>.
+          Messengers that shrink images (WhatsApp, Instagram) will still wipe the message.
+          Lower capacity than lossless.
+        </p>
+
         <label class="field">
           <span class="field__label">Carrier image (PNG or any decodable image)</span>
           <input id="hide-image" type="file" accept="image/*" />
@@ -52,6 +69,7 @@
         </label>
 
         <button id="hide-run" class="action">Embed &amp; download PNG</button>
+        <p id="hide-hint" class="hint"></p>
         <p id="hide-status" class="status" role="status"></p>
         <canvas id="hide-canvas" hidden></canvas>
       </section>
@@ -59,7 +77,7 @@
       <!-- REVEAL -->
       <section id="panel-reveal" class="panel" hidden role="tabpanel">
         <label class="field">
-          <span class="field__label">Stego image (must be a lossless PNG)</span>
+          <span class="field__label">Stego image (PNG from lossless mode, or JPEG from robust mode)</span>
           <input id="reveal-image" type="file" accept="image/*" />
         </label>
 
@@ -80,8 +98,9 @@
       <footer class="footer">
         <p>
           Everything runs in your browser. No pixel and no password ever leaves this
-          device. Share only <strong>PNG</strong> — recompression (JPEG, messengers)
-          destroys the hidden bits.
+          device. <strong>Lossless (PNG)</strong> holds the most but breaks on any
+          re-encode — share the PNG untouched. <strong>Robust (JPEG)</strong> survives
+          re-encoding but not resizing.
         </p>
       </footer>
     </main>

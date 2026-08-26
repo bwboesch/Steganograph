@@ -3,6 +3,7 @@
 // and the codec, and reports status.
 
 import { encode, decode, messageCapacityBytes } from "./engine/codec";
+import { encodeRobust, decodeRobust, robustMessageCapacityBytes } from "./engine/robust";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -23,15 +24,27 @@ async function fileToImageData(file: File, canvas: HTMLCanvasElement): Promise<I
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-/** Render ImageData to the canvas and hand back a lossless PNG blob. */
-function imageDataToPngBlob(image: ImageData, canvas: HTMLCanvasElement): Promise<Blob> {
+/**
+ * Render ImageData to the canvas and hand back an encoded blob. Lossless mode
+ * exports PNG (LSB needs exact bytes); robust mode exports JPEG at high quality
+ * — its DCT/QIM payload is built to survive exactly that recompression.
+ */
+function imageDataToBlob(
+  image: ImageData,
+  canvas: HTMLCanvasElement,
+  type: "image/png" | "image/jpeg",
+): Promise<Blob> {
   canvas.width = image.width;
   canvas.height = image.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas 2D context unavailable");
   ctx.putImageData(image, 0, 0);
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("PNG export failed"))), "image/png"),
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("image export failed"))),
+      type,
+      type === "image/jpeg" ? 0.92 : undefined,
+    ),
   );
 }
 
@@ -74,16 +87,41 @@ export function initUI(): void {
   const hideRun = $<HTMLButtonElement>("hide-run");
   const hideStatus = $("hide-status");
   const hideCapacity = $("hide-capacity");
+  const hideHint = $("hide-hint");
   const hideCanvas = $<HTMLCanvasElement>("hide-canvas");
+  const robustWarning = $("robust-warning");
+  const modeRobust = $<HTMLInputElement>("mode-robust");
   let carrier: ImageData | null = null;
+
+  const isRobust = (): boolean => modeRobust.checked;
+
+  function refreshMode(): void {
+    const robust = isRobust();
+    robustWarning.hidden = !robust;
+    hideRun.textContent = robust ? "Embed & download JPEG" : "Embed & download PNG";
+    hideHint.textContent = robust
+      ? "Output is a JPEG. It survives re-encoding, but any resize (most messengers) wipes it."
+      : "Output is a lossless PNG. Share it unchanged — re-encoding wipes it.";
+    if (carrier) showCapacity();
+  }
+
+  function showCapacity(): void {
+    if (!carrier) return;
+    const cap = isRobust() ? robustMessageCapacityBytes(carrier) : messageCapacityBytes(carrier);
+    const label = isRobust() ? "Robust capacity" : "Capacity";
+    hideCapacity.textContent = `${label}: ~${cap.toLocaleString()} bytes (${carrier.width}×${carrier.height}). Encryption adds ~44 bytes of overhead.`;
+  }
+
+  for (const el of document.querySelectorAll<HTMLInputElement>('input[name="hide-mode"]')) {
+    el.addEventListener("change", refreshMode);
+  }
 
   hideImage.addEventListener("change", async () => {
     const file = hideImage.files?.[0];
     if (!file) return;
     try {
       carrier = await fileToImageData(file, hideCanvas);
-      const cap = messageCapacityBytes(carrier);
-      hideCapacity.textContent = `Capacity: ~${cap.toLocaleString()} bytes (${carrier.width}×${carrier.height}). Encryption adds ~44 bytes of overhead.`;
+      showCapacity();
       setStatus(hideStatus, "");
     } catch (e) {
       carrier = null;
@@ -96,25 +134,27 @@ export function initUI(): void {
     if (!carrier) return setStatus(hideStatus, "Load a carrier image first.", "error");
     const message = hideMessage.value;
     if (!message) return setStatus(hideStatus, "Type a message to conceal.", "error");
+    const robust = isRobust();
+    const password = hidePassword.value || undefined;
     hideRun.disabled = true;
     setStatus(hideStatus, "Embedding…");
     try {
-      const stego = await encode(carrier, message, hidePassword.value || undefined);
-      const blob = await imageDataToPngBlob(stego, hideCanvas);
-      download(blob, "stego.png");
-      setStatus(
-        hideStatus,
-        hidePassword.value
-          ? "Done — encrypted message embedded. Downloaded stego.png."
-          : "Done — message embedded (plaintext). Downloaded stego.png.",
-        "ok",
-      );
+      const stego = robust
+        ? await encodeRobust(carrier, message, password)
+        : await encode(carrier, message, password);
+      const blob = await imageDataToBlob(stego, hideCanvas, robust ? "image/jpeg" : "image/png");
+      const name = robust ? "stego.jpg" : "stego.png";
+      download(blob, name);
+      const enc = password ? "encrypted message" : "message (plaintext)";
+      setStatus(hideStatus, `Done — ${enc} embedded. Downloaded ${name}.`, "ok");
     } catch (e) {
       setStatus(hideStatus, String(e instanceof Error ? e.message : e), "error");
     } finally {
       hideRun.disabled = false;
     }
   });
+
+  refreshMode();
 
   // --- Reveal ---------------------------------------------------------------
   const revealImage = $<HTMLInputElement>("reveal-image");
@@ -144,14 +184,31 @@ export function initUI(): void {
     setStatus(revealStatus, "Reading…");
     revealOutputField.hidden = true;
     try {
-      const message = await decode(stegoImage, revealPassword.value || undefined);
+      const { message, mode } = await revealAny(stegoImage, revealPassword.value || undefined);
       revealOutput.value = message;
       revealOutputField.hidden = false;
-      setStatus(revealStatus, "Message revealed.", "ok");
+      setStatus(revealStatus, `Message revealed (${mode} mode).`, "ok");
     } catch (e) {
       setStatus(revealStatus, String(e instanceof Error ? e.message : e), "error");
     } finally {
       revealRun.disabled = false;
     }
   });
+}
+
+/**
+ * Try both codecs. Lossless first; if its header simply isn't there ("bad
+ * magic") fall through to robust. A *definitive* lossless error (valid header
+ * but wrong/missing password, etc.) surfaces instead of masquerading as robust.
+ */
+async function revealAny(
+  image: ImageData,
+  password?: string,
+): Promise<{ message: string; mode: "lossless" | "robust" }> {
+  try {
+    return { message: await decode(image, password), mode: "lossless" };
+  } catch (e) {
+    if (!/bad magic/i.test(String(e instanceof Error ? e.message : e))) throw e;
+  }
+  return { message: await decodeRobust(image, password), mode: "robust" };
 }
