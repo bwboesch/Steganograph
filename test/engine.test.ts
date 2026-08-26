@@ -9,6 +9,7 @@ import { capacityBytes, embed, extract } from "../src/engine/stego";
 import { makeSlotMapper, deriveScatterKey } from "../src/engine/scatter";
 import { embedBits, extractBits, blockCapacity } from "../src/engine/dct";
 import { encodeRobust, decodeRobust, robustMessageCapacityBytes } from "../src/engine/robust";
+import { embedCoarse, extractCoarse, coarseCapacity } from "../src/engine/coarse";
 
 // --- ImageData shim ---------------------------------------------------------
 if (typeof (globalThis as any).ImageData === "undefined") {
@@ -35,6 +36,26 @@ function makeImage(width: number, height: number): ImageData {
     data[i + 3] = 255;
   }
   return new ImageData(data, width, height);
+}
+
+/** Average each 2×2 block → half-size image. A clean stand-in for a resize. */
+function boxDownscale2x(img: ImageData): ImageData {
+  const w = img.width >> 1, h = img.height >> 1;
+  const out = new Uint8ClampedArray(w * h * 4);
+  const s = img.data, W = img.width;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const a = s[((2 * y) * W + 2 * x) * 4 + c];
+        const b = s[((2 * y) * W + 2 * x + 1) * 4 + c];
+        const d = s[((2 * y + 1) * W + 2 * x) * 4 + c];
+        const e = s[((2 * y + 1) * W + 2 * x + 1) * 4 + c];
+        out[o + c] = (a + b + d + e) / 4;
+      }
+      out[o + 3] = 255;
+    }
+  return new ImageData(out, w, h);
 }
 
 // --- micro test harness -----------------------------------------------------
@@ -289,6 +310,46 @@ async function main() {
     const img = makeImage(64, 64); // 64 blocks total, header alone needs 400
     ok("robust reports zero capacity when image too small", robustMessageCapacityBytes(img) === 0);
     ok("robust over-capacity is rejected", await throws(() => encodeRobust(img, "x".repeat(100))));
+  }
+
+  // 20. Coarse (resize-robust) prototype: exact bit roundtrip, no channel.
+  {
+    const img = makeImage(256, 256);
+    const tiles: [number, number] = [16, 16];
+    const cap = coarseCapacity({ tiles });
+    ok("coarse capacity math", cap === 16 * 16);
+    const bits = new Uint8Array(cap);
+    for (let i = 0; i < cap; i++) bits[i] = (i * 3 + 1) & 1;
+    const stego = embedCoarse(img, bits, { tiles, step: 8 });
+    const got = extractCoarse(stego, cap, { tiles, step: 8 });
+    let exact = true;
+    for (let i = 0; i < cap; i++) if (got[i] !== bits[i]) exact = false;
+    ok("coarse embed/extract roundtrip is exact", exact);
+  }
+
+  // 21. Coarse scale-invariance: the whole point. Embed, box-downscale 2× (a
+  //     clean stand-in for a messenger resize), extract via the fractional grid.
+  {
+    const img = makeImage(256, 256);
+    const tiles: [number, number] = [16, 16];
+    const cap = coarseCapacity({ tiles });
+    const bits = new Uint8Array(cap);
+    for (let i = 0; i < cap; i++) bits[i] = (i * 7 + 3) & 1;
+    const stego = embedCoarse(img, bits, { tiles, step: 10 });
+    const small = boxDownscale2x(stego); // 256×256 → 128×128
+    const got = extractCoarse(small, cap, { tiles, step: 10 });
+    let bad = 0;
+    for (let i = 0; i < cap; i++) if (got[i] !== bits[i]) bad++;
+    ok("coarse survives a 2× downscale (fractional grid)", bad === 0);
+  }
+
+  // 22. Coarse over-capacity is rejected.
+  {
+    const img = makeImage(64, 64);
+    const tiles: [number, number] = [8, 8];
+    ok("coarse over-capacity is rejected", await throws(() =>
+      Promise.resolve(embedCoarse(img, new Uint8Array(coarseCapacity({ tiles }) + 1), { tiles })),
+    ));
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

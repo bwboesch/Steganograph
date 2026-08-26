@@ -11,6 +11,9 @@ Subcommands:
   jpeg_resize <in_raw> <out_raw> <quality> <scale> downscale by <scale>, JPEG,
                                                    then upscale back to original
                                                    size (simulates a messenger)
+  jpeg_downscale <in_raw> <out_raw> <quality> <scale>  downscale by <scale> + JPEG,
+                                                   DELIVERED at the small size
+                                                   (what a recipient actually gets)
 """
 import struct
 import sys
@@ -56,6 +59,16 @@ def main():
         buf.seek(0)
         back = Image.open(buf).resize((w, h), Image.BICUBIC)  # what the app would see
         write_raw(back, sys.argv[3])
+    elif cmd == "jpeg_downscale":
+        img = read_raw(sys.argv[2])
+        quality = int(sys.argv[4])
+        scale = float(sys.argv[5])
+        w, h = img.size
+        small = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.BICUBIC)
+        buf = BytesIO()
+        small.save(buf, format="JPEG", quality=quality)
+        buf.seek(0)
+        write_raw(Image.open(buf), sys.argv[3])  # delivered at the downscaled size
     else:
         print(f"unknown command: {cmd}", file=sys.stderr)
         sys.exit(2)

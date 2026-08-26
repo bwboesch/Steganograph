@@ -27,7 +27,7 @@ Toolchain is [Bun](https://bun.sh) (the environment has no Node).
 
 ```bash
 bun install
-bun run test      # engine proof — 25/25 headless tests
+bun run test      # engine proof — 29/29 headless tests
 bun run typecheck # tsc --noEmit
 bun run dev       # http://localhost:5173
 bun run build     # production build: service worker + manifest + precache
@@ -124,19 +124,33 @@ inputs, a `<canvas>` and the codec.
     bit-errors at ×0.5, so anything that resizes (WhatsApp/Instagram) still
     wipes it. The UI labels this clearly. See
     [`tools/dct-robustness/FINDINGS.md`](tools/dct-robustness/FINDINGS.md).
-- 🔭 **Resize-robust embedding** — beating downscaling needs a
-  resync/resolution-independent scheme (sync templates, log-polar/Fourier marks,
-  or feature-anchored blocks). A separate, larger research effort.
+- 🔬 **Resize-robust embedding** — *prototype measured* (`src/engine/coarse.ts`
+  + `tools/resize-robustness/`). Coarse **tile-mean QIM**: one bit per large
+  tile, QIM-modulating the tile's mean luminance (the lowest frequency, which a
+  downscale preserves), on a **fractional** tile grid (so uniform scaling needs
+  no resync). Measured against a real downscale-and-deliver channel:
+  - **0 bit-errors down to ×0.5** downscale + JPEG (16² tiles, Δ=12); a real
+    message survives byte-exact through ×0.5 *and* ×0.35 with light ECC — where
+    block-DCT is a ~50% coin-flip at every scale.
+  - **Cost is capacity**: ~10–40 bytes after ECC (a URL, coords, a key — not
+    paragraphs), and it handles uniform scale only (not crop/rotate). See
+    [`tools/resize-robustness/FINDINGS.md`](tools/resize-robustness/FINDINGS.md).
+
+  Next step (if shipped): frame it into a codec like `robust.ts` and add a third
+  "Resize-robust (small payload)" mode. Crop/rotate would need a sync marker +
+  Fourier-Mellin — a separate, larger effort.
 
 ## Layout
 
 ```
 src/engine/{crypto,stego,scatter,codec}.ts  lossless (PNG) LSB engine
 src/engine/{dct,robust}.ts                  robust (JPEG) DCT/QIM engine
+src/engine/coarse.ts                        experimental resize-robust tile-mean QIM
 src/{ui,main}.ts, src/styles.css            PWA shell (two-mode UI)
-test/engine.test.ts                         25 headless tests: roundtrip / tamper /
-                                            capacity / LSB / scatter / dct / robust
+test/engine.test.ts                         29 headless tests: roundtrip / tamper /
+                                            capacity / LSB / scatter / dct / robust / coarse
 tools/dct-robustness/                       JPEG-survival measurement harness + FINDINGS
+tools/resize-robustness/                    downscale-survival harness + FINDINGS
 vite.config.ts                              vite-plugin-pwa (autoUpdate, Workbox precache)
 public/icon-{192,512}.png                   app icons
 ```
