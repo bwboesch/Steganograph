@@ -129,8 +129,8 @@ const CHNAMES = Object.keys(CHANNELS);
 
 console.log("=== COARSE tile-mean QIM — raw BER (real downscale, delivered small) ===");
 console.log("tiles×step   " + CHNAMES.map((c) => c.padStart(8)).join(""));
-for (const tiles of [[16, 16], [24, 24], [32, 32]]) {
-  for (const step of [6, 8, 12]) {
+for (const tiles of [[16, 16], [24, 24], [32, 32], [40, 40], [48, 48]]) {
+  for (const step of [8, 12]) {
     const row = CHNAMES.map((c) => {
       const e = coarseBER(tiles, step, CHANNELS[c]);
       return (e === 0 ? "0" : (e * 100).toFixed(1) + "%").padStart(8);

@@ -27,7 +27,7 @@ Toolchain is [Bun](https://bun.sh) (the environment has no Node).
 
 ```bash
 bun install
-bun run test      # engine proof — 29/29 headless tests
+bun run test      # engine proof — 35/35 headless tests
 bun run typecheck # tsc --noEmit
 bun run dev       # http://localhost:5173
 bun run build     # production build: service worker + manifest + precache
@@ -55,7 +55,7 @@ store, no APK.
 
 ## How it works
 
-The app has **two embedding modes**, both **DOM-free** under `src/engine/` —
+The app has **three embedding modes**, all **DOM-free** under `src/engine/` —
 they touch no browser API beyond the `ImageData` *shape*, which is exactly why
 the whole engine is headless-testable:
 
@@ -64,6 +64,9 @@ the whole engine is headless-testable:
 - **Robust (JPEG)** — DCT/QIM embedding. Survives JPEG re-encoding (email,
   Telegram "send as file", Signal original, cloud links) but **not resizing**.
   Lower capacity.
+- **Resize-robust (JPEG)** — tile-mean QIM. Also survives **uniform downscaling**
+  by messengers (WhatsApp, Instagram) — not cropping/rotation. Tiny **fixed**
+  capacity (~79 bytes plaintext / ~35 encrypted).
 
 The modules:
 
@@ -90,6 +93,11 @@ The modules:
 - **`robust.ts`** — the robust-mode codec: same header framing + AES-GCM, plus
   interleaved repetition ECC (R=5 header, R=3 body) over `dct.ts`. Exported as
   JPEG.
+- **`coarse.ts`** — resize-robust primitive: QIM on the **mean luminance** of
+  each tile in a *fractional* grid (the lowest frequency, which downscaling
+  preserves; the fractional grid makes uniform scaling resync-free).
+- **`resilient.ts`** — the resize-robust codec: header framing + AES-GCM + ECC
+  over `coarse.ts` at a fixed 48×48 grid, Δ=16 (chosen by measurement).
 
 The UI shell (`src/ui.ts`, `src/main.ts`) only shuttles pixels between file
 inputs, a `<canvas>` and the codec.
@@ -104,9 +112,10 @@ inputs, a `<canvas>` and the codec.
   which is what makes "offline" honest.
 - Scattering blurs the steganalysis *signature*; it does **not** add robustness
   to recompression. In **lossless (PNG)** mode, LSB (in any bit order) is
-  destroyed by re-encoding, so share the PNG unchanged. Use **robust (JPEG)**
-  mode when the image will be re-encoded — but note it does **not** survive
-  resizing, so messengers that downscale (WhatsApp, Instagram) still wipe it.
+  destroyed by re-encoding, so share the PNG unchanged. **Robust (JPEG)** mode
+  survives re-encoding but not resizing. **Resize-robust (JPEG)** mode survives
+  uniform downscaling too (short payload only) — but none of the modes survive
+  cropping or rotation.
 
 ## Roadmap
 
@@ -124,31 +133,30 @@ inputs, a `<canvas>` and the codec.
     bit-errors at ×0.5, so anything that resizes (WhatsApp/Instagram) still
     wipes it. The UI labels this clearly. See
     [`tools/dct-robustness/FINDINGS.md`](tools/dct-robustness/FINDINGS.md).
-- 🔬 **Resize-robust embedding** — *prototype measured* (`src/engine/coarse.ts`
-  + `tools/resize-robustness/`). Coarse **tile-mean QIM**: one bit per large
-  tile, QIM-modulating the tile's mean luminance (the lowest frequency, which a
-  downscale preserves), on a **fractional** tile grid (so uniform scaling needs
-  no resync). Measured against a real downscale-and-deliver channel:
-  - **0 bit-errors down to ×0.5** downscale + JPEG (16² tiles, Δ=12); a real
-    message survives byte-exact through ×0.5 *and* ×0.35 with light ECC — where
-    block-DCT is a ~50% coin-flip at every scale.
-  - **Cost is capacity**: ~10–40 bytes after ECC (a URL, coords, a key — not
-    paragraphs), and it handles uniform scale only (not crop/rotate). See
+- ✅ **Resize-robust "Resize-robust (JPEG)" mode** — *shipped*
+  (`src/engine/{coarse,resilient}.ts` + `tools/resize-robustness/`). Tile-mean
+  QIM on a fixed 48×48 fractional grid, Δ=16, with AES-GCM + repetition ECC.
+  Measured against a real downscale-and-deliver channel, and confirmed by a
+  real-browser E2E (encrypt → embed → canvas JPEG → browser downscale → re-JPEG
+  → decrypt):
+  - A full **encrypted payload comes back byte-exact through a ×0.5 downscale +
+    JPEG** on both a 512² and a 1024² cover — where block-DCT is a ~50%
+    coin-flip at every scale.
+  - **Cost is a tiny fixed capacity** (~79 bytes / ~35 encrypted) and
+    uniform-scale-only robustness (not crop/rotate). See
     [`tools/resize-robustness/FINDINGS.md`](tools/resize-robustness/FINDINGS.md).
-
-  Next step (if shipped): frame it into a codec like `robust.ts` and add a third
-  "Resize-robust (small payload)" mode. Crop/rotate would need a sync marker +
-  Fourier-Mellin — a separate, larger effort.
+- 🔭 **Crop/rotation robustness** — would need a sync marker + offset search or a
+  Fourier-Mellin (log-polar) domain. A separate, larger research effort.
 
 ## Layout
 
 ```
 src/engine/{crypto,stego,scatter,codec}.ts  lossless (PNG) LSB engine
 src/engine/{dct,robust}.ts                  robust (JPEG) DCT/QIM engine
-src/engine/coarse.ts                        experimental resize-robust tile-mean QIM
-src/{ui,main}.ts, src/styles.css            PWA shell (two-mode UI)
-test/engine.test.ts                         29 headless tests: roundtrip / tamper /
-                                            capacity / LSB / scatter / dct / robust / coarse
+src/engine/{coarse,resilient}.ts            resize-robust (JPEG) tile-mean QIM engine
+src/{ui,main}.ts, src/styles.css            PWA shell (three-mode UI)
+test/engine.test.ts                         35 headless tests: roundtrip / tamper / capacity
+                                            / LSB / scatter / dct / robust / coarse / resilient
 tools/dct-robustness/                       JPEG-survival measurement harness + FINDINGS
 tools/resize-robustness/                    downscale-survival harness + FINDINGS
 vite.config.ts                              vite-plugin-pwa (autoUpdate, Workbox precache)

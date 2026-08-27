@@ -43,14 +43,14 @@
           </label>
           <label class="mode">
             <input type="radio" name="hide-mode" id="mode-robust" value="robust" />
-            <span><strong>Robust (JPEG)</strong> — survives JPEG re-encoding (email, Telegram-as-file, Signal original, cloud links).</span>
+            <span><strong>Robust (JPEG)</strong> — survives JPEG re-encoding (email, Telegram-as-file, Signal original, cloud links). Not resizing.</span>
+          </label>
+          <label class="mode">
+            <input type="radio" name="hide-mode" id="mode-resilient" value="resilient" />
+            <span><strong>Resize-robust (JPEG)</strong> — also survives downscaling by messengers (WhatsApp, Instagram). Tiny fixed capacity.</span>
           </label>
         </fieldset>
-        <p id="robust-warning" class="warning" hidden>
-          ⚠ Robust mode survives <strong>re-encoding</strong> but <strong>not resizing</strong>.
-          Messengers that shrink images (WhatsApp, Instagram) will still wipe the message.
-          Lower capacity than lossless.
-        </p>
+        <p id="mode-warning" class="warning" hidden></p>
 
         <label class="field">
           <span class="field__label">Carrier image (PNG or any decodable image)</span>
@@ -99,8 +99,9 @@
         <p>
           Everything runs in your browser. No pixel and no password ever leaves this
           device. <strong>Lossless (PNG)</strong> holds the most but breaks on any
-          re-encode — share the PNG untouched. <strong>Robust (JPEG)</strong> survives
-          re-encoding but not resizing.
+          re-encode. <strong>Robust (JPEG)</strong> survives re-encoding but not
+          resizing. <strong>Resize-robust (JPEG)</strong> also survives messenger
+          downscaling, at a tiny fixed capacity.
         </p>
       </footer>
     </main>

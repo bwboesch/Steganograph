@@ -10,6 +10,7 @@ import { makeSlotMapper, deriveScatterKey } from "../src/engine/scatter";
 import { embedBits, extractBits, blockCapacity } from "../src/engine/dct";
 import { encodeRobust, decodeRobust, robustMessageCapacityBytes } from "../src/engine/robust";
 import { embedCoarse, extractCoarse, coarseCapacity } from "../src/engine/coarse";
+import { encodeResilient, decodeResilient, resilientMessageCapacityBytes } from "../src/engine/resilient";
 
 // --- ImageData shim ---------------------------------------------------------
 if (typeof (globalThis as any).ImageData === "undefined") {
@@ -35,6 +36,20 @@ function makeImage(width: number, height: number): ImageData {
     data[i + 2] = (i * 29) & 0xff;
     data[i + 3] = 255;
   }
+  return new ImageData(data, width, height);
+}
+
+/** A smooth, mid-range photo-ish image — no saturated tiles to clip QIM offsets. */
+function makeSmoothImage(width: number, height: number): ImageData {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const p = (y * width + x) * 4;
+      data[p] = 128 + 60 * Math.sin(x / 40) * Math.cos(y / 55);
+      data[p + 1] = 128 + 50 * Math.sin((x + y) / 60);
+      data[p + 2] = 128 + 40 * Math.cos(x / 70);
+      data[p + 3] = 255;
+    }
   return new ImageData(data, width, height);
 }
 
@@ -330,7 +345,7 @@ async function main() {
   // 21. Coarse scale-invariance: the whole point. Embed, box-downscale 2× (a
   //     clean stand-in for a messenger resize), extract via the fractional grid.
   {
-    const img = makeImage(256, 256);
+    const img = makeSmoothImage(256, 256);
     const tiles: [number, number] = [16, 16];
     const cap = coarseCapacity({ tiles });
     const bits = new Uint8Array(cap);
@@ -350,6 +365,34 @@ async function main() {
     ok("coarse over-capacity is rejected", await throws(() =>
       Promise.resolve(embedCoarse(img, new Uint8Array(coarseCapacity({ tiles }) + 1), { tiles })),
     ));
+  }
+
+  // 23. Resize-robust codec: plaintext + encrypted roundtrip (no channel).
+  {
+    const img = makeSmoothImage(512, 512);
+    const msg = "meet@dawn — 51.5,-0.1";
+    ok("resilient plaintext roundtrip", (await decodeResilient(await encodeResilient(img, msg))) === msg);
+    const enc = await encodeResilient(img, "the key is 42", "pw");
+    ok("resilient encrypted roundtrip", (await decodeResilient(enc, "pw")) === "the key is 42");
+    ok("resilient wrong password throws", await throws(() => decodeResilient(enc, "no")));
+  }
+
+  // 24. Resize-robust survives a 2× downscale — the headline claim — for a full
+  //     encrypted payload (all-or-nothing: one residual bit error fails GCM).
+  {
+    const img = makeSmoothImage(512, 512);
+    const secret = "rendezvous 21:00";
+    const stego = await encodeResilient(img, secret, "s3cret");
+    const small = boxDownscale2x(stego); // 512 → 256
+    ok("resilient encrypted survives 2× downscale", (await decodeResilient(small, "s3cret")) === secret);
+  }
+
+  // 25. Resize-robust capacity is fixed and over-capacity is rejected.
+  {
+    const img = makeSmoothImage(512, 512);
+    const cap = resilientMessageCapacityBytes();
+    ok("resilient capacity is a sane fixed figure", cap > 40 && cap < 200);
+    ok("resilient over-capacity is rejected", await throws(() => encodeResilient(img, "x".repeat(cap + 1))));
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

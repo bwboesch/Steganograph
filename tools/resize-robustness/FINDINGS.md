@@ -75,8 +75,11 @@ downscale + JPEG.
   shifts content vs the fractional grid and needs an added sync marker + offset
   search. Rotation is out of scope (that's the Fourier-Mellin territory).
 
-Next step: if we ship it, wrap `coarse.ts` in a framed + ECC codec (like
-`robust.ts` wraps `dct.ts`) and add it as a third mode — "Resize-robust (small
-payload)" — with the capacity clearly labelled.
+**Shipped:** `coarse.ts` is wrapped by `src/engine/resilient.ts` (framing +
+AES-GCM + ECC) at a fixed 48×48 grid, Δ=16, header R=5 / payload R=3 — the
+safest point that still leaves usable capacity (0 residual errors to ×0.5 on
+both a 512² and 1024² cover; a full encrypted payload verified byte-exact
+through a real browser downscale). It's the "Resize-robust (JPEG)" mode in the
+UI.
 
 Reproduce: `bun tools/resize-robustness/harness.mjs` (needs Python + PIL).

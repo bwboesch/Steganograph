@@ -4,6 +4,9 @@
 
 import { encode, decode, messageCapacityBytes } from "./engine/codec";
 import { encodeRobust, decodeRobust, robustMessageCapacityBytes } from "./engine/robust";
+import { encodeResilient, decodeResilient, resilientMessageCapacityBytes } from "./engine/resilient";
+
+type Mode = "lossless" | "robust" | "resilient";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -89,27 +92,49 @@ export function initUI(): void {
   const hideCapacity = $("hide-capacity");
   const hideHint = $("hide-hint");
   const hideCanvas = $<HTMLCanvasElement>("hide-canvas");
-  const robustWarning = $("robust-warning");
-  const modeRobust = $<HTMLInputElement>("mode-robust");
+  const modeWarning = $("mode-warning");
   let carrier: ImageData | null = null;
 
-  const isRobust = (): boolean => modeRobust.checked;
+  const currentMode = (): Mode =>
+    ($<HTMLInputElement>("mode-resilient").checked && "resilient") ||
+    ($<HTMLInputElement>("mode-robust").checked && "robust") ||
+    "lossless";
+
+  const asJpeg = (m: Mode): boolean => m === "robust" || m === "resilient";
+
+  const WARNINGS: Record<Mode, string> = {
+    lossless: "",
+    robust:
+      "⚠ Robust mode survives re-encoding but NOT resizing. Messengers that shrink images (WhatsApp, Instagram) will still wipe the message. Lower capacity than lossless.",
+    resilient:
+      "⚠ Resize-robust mode survives re-encoding AND uniform downscaling (most messengers), but NOT cropping or rotation. Capacity is tiny and fixed (~79 bytes / ~35 encrypted). Use a reasonably large carrier image.",
+  };
 
   function refreshMode(): void {
-    const robust = isRobust();
-    robustWarning.hidden = !robust;
-    hideRun.textContent = robust ? "Embed & download JPEG" : "Embed & download PNG";
-    hideHint.textContent = robust
-      ? "Output is a JPEG. It survives re-encoding, but any resize (most messengers) wipes it."
-      : "Output is a lossless PNG. Share it unchanged — re-encoding wipes it.";
+    const m = currentMode();
+    modeWarning.hidden = m === "lossless";
+    modeWarning.innerHTML = WARNINGS[m].replace(/(re-encoding|resizing|downscaling|cropping|rotation|NOT)/g, "<strong>$1</strong>");
+    hideRun.textContent = asJpeg(m) ? "Embed & download JPEG" : "Embed & download PNG";
+    hideHint.textContent = {
+      lossless: "Output is a lossless PNG. Share it unchanged — re-encoding wipes it.",
+      robust: "Output is a JPEG. It survives re-encoding, but any resize (most messengers) wipes it.",
+      resilient: "Output is a JPEG. It survives re-encoding and downscaling — good for messengers.",
+    }[m];
     if (carrier) showCapacity();
   }
 
   function showCapacity(): void {
     if (!carrier) return;
-    const cap = isRobust() ? robustMessageCapacityBytes(carrier) : messageCapacityBytes(carrier);
-    const label = isRobust() ? "Robust capacity" : "Capacity";
-    hideCapacity.textContent = `${label}: ~${cap.toLocaleString()} bytes (${carrier.width}×${carrier.height}). Encryption adds ~44 bytes of overhead.`;
+    const m = currentMode();
+    const cap =
+      m === "resilient"
+        ? resilientMessageCapacityBytes()
+        : m === "robust"
+          ? robustMessageCapacityBytes(carrier)
+          : messageCapacityBytes(carrier);
+    const label = m === "lossless" ? "Capacity" : m === "robust" ? "Robust capacity" : "Resize-robust capacity";
+    const fixed = m === "resilient" ? " (fixed)" : "";
+    hideCapacity.textContent = `${label}: ~${cap.toLocaleString()} bytes${fixed} (${carrier.width}×${carrier.height}). Encryption adds ~44 bytes of overhead.`;
   }
 
   for (const el of document.querySelectorAll<HTMLInputElement>('input[name="hide-mode"]')) {
@@ -134,16 +159,20 @@ export function initUI(): void {
     if (!carrier) return setStatus(hideStatus, "Load a carrier image first.", "error");
     const message = hideMessage.value;
     if (!message) return setStatus(hideStatus, "Type a message to conceal.", "error");
-    const robust = isRobust();
+    const m = currentMode();
     const password = hidePassword.value || undefined;
     hideRun.disabled = true;
     setStatus(hideStatus, "Embedding…");
     try {
-      const stego = robust
-        ? await encodeRobust(carrier, message, password)
-        : await encode(carrier, message, password);
-      const blob = await imageDataToBlob(stego, hideCanvas, robust ? "image/jpeg" : "image/png");
-      const name = robust ? "stego.jpg" : "stego.png";
+      const stego =
+        m === "resilient"
+          ? await encodeResilient(carrier, message, password)
+          : m === "robust"
+            ? await encodeRobust(carrier, message, password)
+            : await encode(carrier, message, password);
+      const jpeg = asJpeg(m);
+      const blob = await imageDataToBlob(stego, hideCanvas, jpeg ? "image/jpeg" : "image/png");
+      const name = jpeg ? "stego.jpg" : "stego.png";
       download(blob, name);
       const enc = password ? "encrypted message" : "message (plaintext)";
       setStatus(hideStatus, `Done — ${enc} embedded. Downloaded ${name}.`, "ok");
@@ -197,18 +226,28 @@ export function initUI(): void {
 }
 
 /**
- * Try both codecs. Lossless first; if its header simply isn't there ("bad
- * magic") fall through to robust. A *definitive* lossless error (valid header
- * but wrong/missing password, etc.) surfaces instead of masquerading as robust.
+ * Try each codec in turn. A "bad magic" error means that codec's header simply
+ * isn't present → try the next. Any *definitive* error (valid header but
+ * wrong/missing password, etc.) surfaces immediately instead of masquerading as
+ * the next mode.
  */
 async function revealAny(
   image: ImageData,
   password?: string,
-): Promise<{ message: string; mode: "lossless" | "robust" }> {
-  try {
-    return { message: await decode(image, password), mode: "lossless" };
-  } catch (e) {
-    if (!/bad magic/i.test(String(e instanceof Error ? e.message : e))) throw e;
+): Promise<{ message: string; mode: Mode }> {
+  const chain: [Mode, (i: ImageData, p?: string) => Promise<string>][] = [
+    ["lossless", decode],
+    ["robust", decodeRobust],
+    ["resilient", decodeResilient],
+  ];
+  for (let i = 0; i < chain.length; i++) {
+    const [mode, fn] = chain[i];
+    try {
+      return { message: await fn(image, password), mode };
+    } catch (e) {
+      const isBadMagic = /bad magic/i.test(String(e instanceof Error ? e.message : e));
+      if (!isBadMagic || i === chain.length - 1) throw e;
+    }
   }
-  return { message: await decodeRobust(image, password), mode: "robust" };
+  throw new Error("no hidden message found");
 }
